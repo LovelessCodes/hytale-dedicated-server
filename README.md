@@ -15,7 +15,8 @@ A containerized environment for running a Hytale dedicated server with automatic
 ### Docker Compose
 ```yaml
 services:
-  hytale:
+  hytale-server:
+    container_name: hytale-server
     image: ghcr.io/lovelesscodes/hytale-dedicated-server:main
     ports:
       - "5520:5520/udp"
