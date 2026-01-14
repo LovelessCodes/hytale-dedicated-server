@@ -7,7 +7,7 @@ HYTALE_PORT="${HYTALE_PORT:-5520}"
 BIND_ADDR="${BIND_ADDR:-0.0.0.0}"
 AUTO_UPDATE="${AUTO_UPDATE:-true}"
 HW_ID_STATUS="Unknown"
-HAS_HARDWARE_ID=false
+HAS_HARDWARE_ID=true
 IS_AUTHENTICATED=false
 AUTH_REQUEST_TIME=0
 AUTH_PENDING=false
@@ -27,8 +27,6 @@ process_logs() {
         
         if [[ "$line" == *"Failed to get Hardware UUID"* ]]; then
             HW_ID_STATUS="Failed (Non-persistent mode)"; HAS_HARDWARE_ID=false
-        elif [[ "$line" == *"Hardware UUID:"* ]]; then
-            HW_ID_STATUS="Obtained"; HAS_HARDWARE_ID=true
         fi
 
         if [[ "$line" == *"Successfully created game session"* ]] || [[ "$line" == *"Session Token: Present"* ]] || [[ "$line" == *"Authentication successful"* ]]; then
