@@ -7,6 +7,9 @@ HYTALE_PORT="${HYTALE_PORT:-5520}"
 BIND_ADDR="${BIND_ADDR:-0.0.0.0}"
 AUTO_UPDATE="${AUTO_UPDATE:-true}"
 HW_ID_STATUS="Unknown"
+if [ -f /etc/machine-id ]; then
+    HW_ID_STATUS=$(cat /etc/machine-id)
+fi
 HAS_HARDWARE_ID=true
 IS_AUTHENTICATED=false
 AUTH_REQUEST_TIME=0
@@ -29,11 +32,10 @@ gen_row() {
 
 gen_html() {
     local header="$1"
-    local status=$(gen_row "Status" "$2")
-    local hwid=$(gen_row "Hardware ID" "$3")
-    local expires=$(gen_row "Expires" "$4")
-    local auth=$(gen_row "Auth" "$5")
-    local reload_seconds="${6:-10}"
+    local status=$(gen_row "Hardware ID Status" "$2")
+    local expires=$(gen_row "Expires" "$3")
+    local auth=$(gen_row "Auth" "$4")
+    local reload_seconds="${5:-10}"
     sed -e "s/{{HEADER}}/$header/g" \
     -e "s|{{STATUS_ROW}}|$status|g" \
     -e "s|{{HWID_ROW}}|$hwid|g" \
@@ -58,7 +60,7 @@ process_logs() {
         if [[ "$line" == *"Successfully created game session"* ]] || [[ "$line" == *"Session Token: Present"* ]] || [[ "$line" == *"Authentication successful"* ]]; then
             IS_AUTHENTICATED=true; AUTH_PENDING=false
             [ "$HAS_HARDWARE_ID" = "true" ] && echo "/auth persistence Encrypted" > $PIPE
-            gen_html "Status: Authenticated" "$HW_ID_STATUS" "" "" "" 10
+            gen_html "Status: Authenticated" "$HW_ID_STATUS" "" "" 10
         fi
 
         if [[ "$line" == *"Session Token: Missing"* ]]; then
@@ -71,9 +73,9 @@ process_logs() {
             if [ -n "$AUTH_URL" ]; then
                 AUTH_REQUEST_TIME=$(date +%s)
                 if [ "$STAGE" = "initializing" ]; then
-                    gen_html "Hytale Auth Required for Download" "$HW_ID_STATUS" "" "<a href='$AUTH_URL' target='_blank'>$AUTH_URL</a>" "" 5
+                    gen_html "Hytale Auth Required for Download" "$HW_ID_STATUS" "" "<a href='$AUTH_URL' target='_blank'>$AUTH_URL</a>" 5
                 else
-                    gen_html "Hytale Auth Required for Server Start" "$HW_ID_STATUS" "" "<a href='$AUTH_URL' target='_blank'>$AUTH_URL</a>" "Expires in: ~10 minutes" 10
+                    gen_html "Hytale Auth Required for Server Start" "$HW_ID_STATUS" "Expires in: ~10 minutes" "<a href='$AUTH_URL' target='_blank'>$AUTH_URL</a>" 10
                 fi
             fi
         fi
@@ -174,6 +176,6 @@ STAGE="starting"
     done
 ) &
 
-gen_html "Status: Starting" "$HW_ID_STATUS" "" "" "" 10
+gen_html "Status: Starting" "$HW_ID_STATUS" "" "" 10
 
 tail -f $PIPE | $JAVA_CMD -jar HytaleServer.jar $ARGS 2>&1 | tee /tmp/server.log | process_logs
