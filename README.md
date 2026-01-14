@@ -16,7 +16,7 @@ A containerized environment for running a Hytale dedicated server with automatic
 ```yaml
 services:
   hytale:
-    image: lovelesscx/hytale:latest
+    image: ghcr.io/lovelesscodes/hytale-dedicated-server:main
     ports:
       - "5520:5520/udp"
       - "8080:8080"
