@@ -27,6 +27,8 @@ services:
       - USE_AOT_CACHE=true
     volumes:
       - ./data:/app
+      # Allows to persist server authorization with /auth persistence Encrypted
+      # - /etc/machine-id:/etc/machine-id:ro
 ```
 
 ## Configuration
