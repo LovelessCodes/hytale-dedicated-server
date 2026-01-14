@@ -17,12 +17,38 @@ touch /tmp/server.log
 mkdir -p /www
 echo "Server starting..." > /www/index.html
 
+gen_row() {
+    local label=$1
+    local value=$2
+    if [[ -n "$value" ]]; then
+        echo "<div class='stat'><span class='label'>$label:</span><span>$value</span></div>"
+    else
+        echo ""
+    fi
+}
+
+gen_html() {
+    local header="$1"
+    local status=$(gen_row "Status" "$2")
+    local hwid=$(gen_row "Hardware ID" "$3")
+    local expires=$(gen_row "Expires" "$4")
+    local auth=$(gen_row "Auth" "$5")
+    local reload_seconds="${6:-10}"
+    sed -e "s/{{HEADER}}/$header/g" \
+    -e "s|{{STATUS_ROW}}|$status|g" \
+    -e "s|{{HWID_ROW}}|$hwid|g" \
+    -e "s|{{EXPIRES_ROW}}|$expires|g" \
+    -e "s|{{AUTH_ROW}}|$auth|g" \
+    -e "s/{{RELOAD_SECONDS}}/$reload_seconds/g" \
+    /template.html > /www/index.html
+}
+
 process_logs() {
     while read -r line; do
         echo "$line"
 
         if [[ "$line" == *"downloading latest"* ]]; then
-            echo "<html><head><meta http-equiv='refresh' content='10'></head><body><h1>Status: Downloading Latest</h1><p>Hardware ID: <b>$HW_ID_STATUS</b></p></body></html>" > /www/index.html
+            gen_html "Status: Downloading Latest" "$HW_ID_STATUS" "" "" "" 10
         fi
         
         if [[ "$line" == *"Failed to get Hardware UUID"* ]]; then
@@ -32,7 +58,7 @@ process_logs() {
         if [[ "$line" == *"Successfully created game session"* ]] || [[ "$line" == *"Session Token: Present"* ]] || [[ "$line" == *"Authentication successful"* ]]; then
             IS_AUTHENTICATED=true; AUTH_PENDING=false
             [ "$HAS_HARDWARE_ID" = "true" ] && echo "/auth persistence Encrypted" > $PIPE
-            echo "<html><head><meta http-equiv='refresh' content='10'></head><body><h1>Status: Authenticated</h1><p>Hardware ID: <b>$HW_ID_STATUS</b></p></body></html>" > /www/index.html
+            gen_html "Status: Authenticated" "$HW_ID_STATUS" "" "" "" 10
         fi
 
         if [[ "$line" == *"Session Token: Missing"* ]]; then
@@ -45,9 +71,9 @@ process_logs() {
             if [ -n "$AUTH_URL" ]; then
                 AUTH_REQUEST_TIME=$(date +%s)
                 if [ "$STAGE" = "initializing" ]; then
-                    echo "<html><head><meta http-equiv='refresh' content='5'></head><body><h1>Hytale Auth Required for Download</h1><p>Hardware ID: <b>$HW_ID_STATUS</b></p><p>Visit: <a href='$AUTH_URL' target='_blank'>$AUTH_URL</a></p></body></html>" > /www/index.html
+                    gen_html "Hytale Auth Required for Download" "$HW_ID_STATUS" "" "<a href='$AUTH_URL' target='_blank'>$AUTH_URL</a>" "" 5
                 else
-                    echo "<html><head><meta http-equiv='refresh' content='10'></head><body><h1>Hytale Auth Required for Server Start</h1><p>Hardware ID: <b>$HW_ID_STATUS</b></p><p>Visit: <a href='$AUTH_URL' target='_blank'>$AUTH_URL</a></p><p>Expires in: ~10 minutes</p></body></html>" > /www/index.html
+                    gen_html "Hytale Auth Required for Server Start" "$HW_ID_STATUS" "" "<a href='$AUTH_URL' target='_blank'>$AUTH_URL</a>" "Expires in: ~10 minutes" 10
                 fi
             fi
         fi
@@ -148,7 +174,6 @@ STAGE="starting"
     done
 ) &
 
-echo "<html><head><meta http-equiv='refresh' content='10'></head><body>" > /www/index.html
-echo "<h1>Status: Starting</h1></body></html>" >> /www/index.html
+gen_html "Status: Starting" "$HW_ID_STATUS" "" "" "" 10
 
 tail -f $PIPE | $JAVA_CMD -jar HytaleServer.jar $ARGS 2>&1 | tee /tmp/server.log | process_logs

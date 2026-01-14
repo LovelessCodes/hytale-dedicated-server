@@ -14,6 +14,7 @@ RUN curl -L https://downloader.hytale.com/hytale-downloader.zip -o /tmp/download
     && rm -rf /tmp/downloader.zip /tmp/extract
 
 COPY entrypoint.sh /entrypoint.sh
+COPY template.html /template.html
 RUN dos2unix /entrypoint.sh && chmod +x /entrypoint.sh
 
 EXPOSE 5520/udp
