@@ -6,6 +6,7 @@ AUTH_MODE="${AUTH_MODE:-authenticated}"
 HYTALE_PORT="${HYTALE_PORT:-5520}"
 BIND_ADDR="${BIND_ADDR:-0.0.0.0}"
 AUTO_UPDATE="${AUTO_UPDATE:-true}"
+DOWNLOADER_BIN="${DOWNLOADER_BIN:-hytale-downloader}"
 HW_ID_STATUS="Unknown"
 if [ -f /etc/machine-id ]; then
     HW_ID_STATUS=$(cat /etc/machine-id)
@@ -90,25 +91,66 @@ python3 -m http.server 8080 --directory /www --bind 0.0.0.0 &
 WEB_PID=$!
 
 if [ -f "HytaleServer.jar" ] && [ "$AUTO_UPDATE" = "true" ]; then
-    echo "Checking for updates..."
-    hytale-downloader -check-update 2>&1 | process_logs
-elif [ ! -f "HytaleServer.jar" ]; then
-    echo "Starting initial download..."
-    hytale-downloader 2>&1 | process_logs
-fi
+    echo "Checking for downloader updates..."
+    $DOWNLOADER_BIN -check-update 2>&1 | process_logs
 
-ZIP_FILE=$(ls [0-9]*.zip 2>/dev/null | head -n 1)
+    AVAILABLE_VERSION_RAW="$($DOWNLOADER_BIN -print-version 2>&1 || true)"
+    AVAILABLE_VERSION="$(echo "$AVAILABLE_VERSION_RAW" | tr -d '\r' | tail -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 
-if [ -n "$ZIP_FILE" ]; then
-    echo "Extracting server package: $ZIP_FILE..."
-    unzip -o "$ZIP_FILE"
-    
-    JAR_PATH=$(find . -name "HytaleServer.jar" | head -n 1)
-    if [ -n "$JAR_PATH" ] && [ "$JAR_PATH" != "./HytaleServer.jar" ]; then
-        mv "$JAR_PATH" ./HytaleServer.jar
+    if [ -z "$AVAILABLE_VERSION" ]; then
+        echo "ERROR: Could not determine available version from downloader (-print-version). Output was:"
+        echo "$AVAILABLE_VERSION_RAW"
+        exit 1
     fi
     
-    rm "$ZIP_FILE"
+    echo "Available HytaleServer.jar version: $AVAILABLE_VERSION"
+    
+    # Get installed version if jar exists
+    INSTALLED_VERSION=""
+    if [ -f "$JAR_FILE" ]; then
+        INSTALLED_VERSION_RAW="$(java -jar "$JAR_FILE" --version 2>&1 || true)"
+        INSTALLED_VERSION="$(echo "$INSTALLED_VERSION_RAW" | tr -d '\r' | sed -n 's/.*v\([^ ]*\).*/\1/p' | head -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+        
+        if [ -z "$INSTALLED_VERSION" ]; then
+            echo "WARNING: Could not extract version from installed jar. Output was:"
+            echo "$INSTALLED_VERSION_RAW"
+            echo "Treating as outdated and will download..."
+        else
+            echo "Installed HytaleServer.jar version: $INSTALLED_VERSION"
+        fi
+    else
+        echo "HytaleServer.jar not found. Will download..."
+        echo "Starting initial download..."
+        $DOWNLOADER_BIN 2>&1 | process_logs
+    fi
+
+    if [ -n "$INSTALLED_VERSION" ] && [ "$INSTALLED_VERSION" = "$AVAILABLE_VERSION" ]; then
+        echo "HytaleServer.jar is up to date."
+    else
+        echo "Downloading latest HytaleServer.jar version: $AVAILABLE_VERSION ..."
+        $DOWNLOADER_BIN 2>&1 | process_logs
+
+        ZIP_FILE=$(ls [0-9]*.zip 2>/dev/null | head -n 1)
+
+        if [ -n "$ZIP_FILE" ]; then
+            echo "Extracting server package: $ZIP_FILE..."
+            unzip -o "$ZIP_FILE"
+            
+            JAR_PATH=$(find . -name "HytaleServer.jar" | head -n 1)
+            if [ -n "$JAR_PATH" ] && [ "$JAR_PATH" != "./HytaleServer.jar" ]; then
+                mv "$JAR_PATH" ./HytaleServer.jar
+            fi
+            
+            rm "$ZIP_FILE"
+        fi
+    fi
+else
+    if [ ! -f "HytaleServer.jar" ]; then
+        echo "HytaleServer.jar not found and auto-update is disabled. Exiting."
+        exit 1
+    else
+        echo "Auto-update disabled. Using existing HytaleServer.jar."
+    fi
 fi
 
 JAVA_CMD="java"
