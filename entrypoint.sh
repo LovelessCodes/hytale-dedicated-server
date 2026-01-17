@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -ex
 set -e
 
 ASSETS_PATH="${ASSETS_PATH:-Assets.zip}"
@@ -16,6 +16,16 @@ IS_AUTHENTICATED=false
 AUTH_REQUEST_TIME=0
 AUTH_PENDING=false
 STAGE="initializing"
+
+if ! command -v "$DOWNLOADER_BIN" >/dev/null 2>&1; then
+    echo "ERROR: $DOWNLOADER_BIN not found or not executable."
+    exit 1
+fi
+
+if [ ! -f /template.html ]; then
+    echo "ERROR: /template.html missing."
+    exit 1
+fi
 
 PIPE=/tmp/hytale_stdin
 [ -p $PIPE ] || mkfifo $PIPE
@@ -109,7 +119,9 @@ if [ -f "HytaleServer.jar" ] && [ "$AUTO_UPDATE" = "true" ]; then
 
     echo "Checking for latest HytaleServer.jar version..."
 
-    AVAILABLE_VERSION_RAW="$($DOWNLOADER_BIN -print-version 2>&1 || true)"
+    AVAILABLE_VERSION_RAW=$(timeout 15s "$DOWNLOADER_BIN" -print-version 2>&1) || {
+        echo "ERROR: Downloader failed or timed out"
+    }
     gen_html "Status: Parsing Available Version..." "$HW_ID_STATUS" "" "" 10
     AVAILABLE_VERSION="$(echo "$AVAILABLE_VERSION_RAW" | tr -d '\r' | tail -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 
