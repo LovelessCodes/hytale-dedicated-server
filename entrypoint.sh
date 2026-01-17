@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash
 set -e
 
 ASSETS_PATH="${ASSETS_PATH:-Assets.zip}"
