@@ -105,6 +105,8 @@ if [ -f "HytaleServer.jar" ] && [ "$AUTO_UPDATE" = "true" ]; then
     echo "Checking for downloader updates..."
     $DOWNLOADER_BIN -check-update 2>&1 | process_logs
 
+    gen_html "Status: Checking for Updates" "$HW_ID_STATUS" "" "" 10
+
     AVAILABLE_VERSION_RAW="$($DOWNLOADER_BIN -print-version 2>&1 || true)"
     gen_html "Status: Parsing Available Version..." "$HW_ID_STATUS" "" "" 10
     AVAILABLE_VERSION="$(echo "$AVAILABLE_VERSION_RAW" | tr -d '\r' | tail -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
