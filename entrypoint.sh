@@ -44,12 +44,12 @@ gen_html() {
     local expires_row=$(gen_row "Expires" "$expires")
     local auth_row=$(gen_row "Auth" "$auth")
 
-    sed -e "s/{{HEADER}}/$header/g" \
+    sed -e "s|{{HEADER}}|$header|g" \
     -e "s|{{STATUS_ROW}}|$status_row|g" \
     -e "s|{{HWID_ROW}}||g" \
     -e "s|{{EXPIRES_ROW}}|$expires_row|g" \
     -e "s|{{AUTH_ROW}}|$auth_row|g" \
-    -e "s/{{RELOAD_SECONDS}}/$reload_seconds/g" \
+    -e "s|{{RELOAD_SECONDS}}|$reload_seconds|g" \
     /template.html > /www/index.html
 }
 
@@ -68,13 +68,13 @@ process_logs() {
         if [[ "$line" == *"Successfully created game session"* ]] || [[ "$line" == *"Session Token: Present"* ]] || [[ "$line" == *"Authentication successful"* ]]; then
             IS_AUTHENTICATED=true; AUTH_PENDING=false
             if [ "$STAGE" = "starting" ]; then
-                [ "$HAS_HARDWARE_ID" = "true" ] && echo "/auth persistence Encrypted" > $PIPE
+                [ "$HAS_HARDWARE_ID" = "true" ] && echo "/auth persistence Encrypted" > $PIPE &
             fi
             gen_html "Status: Authenticated" "$HW_ID_STATUS" "" "" 10
         fi
 
         if [[ "$line" == *"Session Token: Missing"* ]]; then
-            [ "$STAGE" = "starting" ] && echo "/auth login device" > $PIPE
+            [ "$STAGE" = "starting" ] && echo "/auth login device" > $PIPE &
             AUTH_REQUEST_TIME=$(date +%s); AUTH_PENDING=true
         fi
 
@@ -91,7 +91,7 @@ process_logs() {
         fi
 
         if [[ "$line" == *"Hytale Server Booted!"* ]]; then
-            [ "$STAGE" = "starting" ] && echo "/auth status" > $PIPE
+            [ "$STAGE" = "starting" ] && echo "/auth status" > $PIPE &
         fi
     done
 }
@@ -103,7 +103,7 @@ WEB_PID=$!
 
 if [ -f "HytaleServer.jar" ] && [ "$AUTO_UPDATE" = "true" ]; then
     echo "Checking for downloader updates..."
-    $DOWNLOADER_BIN -check-update 2>&1 | process_logs
+    process_logs < <($DOWNLOADER_BIN -check-update 2>&1)
 
     gen_html "Status: Checking for Updates" "$HW_ID_STATUS" "" "" 10
 
@@ -137,14 +137,14 @@ if [ -f "HytaleServer.jar" ] && [ "$AUTO_UPDATE" = "true" ]; then
     else
         echo "HytaleServer.jar not found. Will download..."
         echo "Starting initial download..."
-        $DOWNLOADER_BIN 2>&1 | process_logs
+        process_logs < <($DOWNLOADER_BIN 2>&1)
     fi
 
     if [ -n "$INSTALLED_VERSION" ] && [ "$INSTALLED_VERSION" = "$AVAILABLE_VERSION" ]; then
         echo "HytaleServer.jar is up to date."
     else
         echo "Downloading latest HytaleServer.jar version: $AVAILABLE_VERSION ..."
-        $DOWNLOADER_BIN 2>&1 | process_logs
+        process_logs < <($DOWNLOADER_BIN 2>&1)
 
         ZIP_FILE=$(ls [0-9]*.zip 2>/dev/null | head -n 1)
 
@@ -224,7 +224,7 @@ STAGE="starting"
         if [ "$AUTH_PENDING" = "true" ] && [ "$IS_AUTHENTICATED" = "false" ]; then
             ELAPSED=$(( $(date +%s) - AUTH_REQUEST_TIME ))
             if [ $ELAPSED -ge 590 ]; then
-                echo "Auth code expired. Re-requesting..." > $PIPE
+                echo "Auth code expired. Re-requesting..." > $PIPE &
             fi
         fi
         sleep 30
@@ -233,4 +233,4 @@ STAGE="starting"
 
 gen_html "Status: Starting" "$HW_ID_STATUS" "" "" 10
 
-tail -f $PIPE | $JAVA_CMD -jar HytaleServer.jar $ARGS 2>&1 | tee /tmp/server.log | process_logs
+process_logs < <(tail -f $PIPE | $JAVA_CMD -jar HytaleServer.jar $ARGS 2>&1 | tee /tmp/server.log)
