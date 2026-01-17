@@ -19,7 +19,6 @@ STAGE="initializing"
 
 touch /tmp/server.log
 mkdir -p /www
-echo "Server starting..." > /www/index.html
 
 gen_row() {
     local label=$1
@@ -86,6 +85,8 @@ process_logs() {
         fi
     done
 }
+
+gen_html "Status: Initializing" "$HW_ID_STATUS" "" "" 10
 
 python3 -m http.server 8080 --directory /www --bind 0.0.0.0 &
 WEB_PID=$!
@@ -186,7 +187,7 @@ ARGS="$ARGS --bind $BIND_ADDR:$HYTALE_PORT"
 HYTALE_ADDITIONAL_OPTS="${HYTALE_ADDITIONAL_OPTS:-}"
 [ -n "$HYTALE_ADDITIONAL_OPTS" ] && ARGS="$ARGS $HYTALE_ADDITIONAL_OPTS"
 
-echo "Waiting for auth code..." > /www/index.html
+gen_html "Status: Waiting for Auth" "$HW_ID_STATUS" "" "" 5
 
 PIPE=/tmp/hytale_stdin
 [ -p $PIPE ] || mkfifo $PIPE
