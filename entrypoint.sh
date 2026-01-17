@@ -98,6 +98,8 @@ if [ -f "HytaleServer.jar" ] && [ "$AUTO_UPDATE" = "true" ]; then
     AVAILABLE_VERSION_RAW="$($DOWNLOADER_BIN -print-version 2>&1 || true)"
     AVAILABLE_VERSION="$(echo "$AVAILABLE_VERSION_RAW" | tr -d '\r' | tail -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 
+    gen_html "Status: Checking for Updates - $AVAILABLE_VERSION" "$HW_ID_STATUS" "" "" 10
+
     if [ -z "$AVAILABLE_VERSION" ]; then
         echo "ERROR: Could not determine available version from downloader (-print-version). Output was:"
         echo "$AVAILABLE_VERSION_RAW"
