@@ -234,8 +234,8 @@ echo "Starting Hytale server:"
 STAGE="starting"
 
 (
-    while true; do
-        if [ "$AUTH_PENDING" = "true" ] && [ "$IS_AUTHENTICATED" = "false" ]; then
+    while [ "$IS_AUTHENTICATED" = "false" ]; do
+        if [ "$AUTH_PENDING" = "true" ]; then
             ELAPSED=$(( $(date +%s) - AUTH_REQUEST_TIME ))
             if [ $ELAPSED -ge 590 ]; then
                 echo "Auth code expired. Re-requesting..." > $PIPE &
