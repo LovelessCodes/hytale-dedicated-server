@@ -17,6 +17,9 @@ AUTH_REQUEST_TIME=0
 AUTH_PENDING=false
 STAGE="initializing"
 
+PIPE=/tmp/hytale_stdin
+[ -p $PIPE ] || mkfifo $PIPE
+
 touch /tmp/server.log
 mkdir -p /www
 
@@ -32,15 +35,20 @@ gen_row() {
 
 gen_html() {
     local header="$1"
-    local status=$(gen_row "Hardware ID Status" "$2")
-    local expires=$(gen_row "Expires" "$3")
-    local auth=$(gen_row "Auth" "$4")
+    local hwid_status="$2"
+    local expires="$3"
+    local auth="$4"
     local reload_seconds="${5:-10}"
+
+    local status_row=$(gen_row "Hardware Status" "$hwid_status")
+    local expires_row=$(gen_row "Expires" "$expires")
+    local auth_row=$(gen_row "Auth" "$auth")
+
     sed -e "s/{{HEADER}}/$header/g" \
-    -e "s|{{STATUS_ROW}}|$status|g" \
-    -e "s|{{HWID_ROW}}|$hwid|g" \
-    -e "s|{{EXPIRES_ROW}}|$expires|g" \
-    -e "s|{{AUTH_ROW}}|$auth|g" \
+    -e "s|{{STATUS_ROW}}|$status_row|g" \
+    -e "s|{{HWID_ROW}}||g" \
+    -e "s|{{EXPIRES_ROW}}|$expires_row|g" \
+    -e "s|{{AUTH_ROW}}|$auth_row|g" \
     -e "s/{{RELOAD_SECONDS}}/$reload_seconds/g" \
     /template.html > /www/index.html
 }
@@ -59,12 +67,14 @@ process_logs() {
 
         if [[ "$line" == *"Successfully created game session"* ]] || [[ "$line" == *"Session Token: Present"* ]] || [[ "$line" == *"Authentication successful"* ]]; then
             IS_AUTHENTICATED=true; AUTH_PENDING=false
-            [ "$HAS_HARDWARE_ID" = "true" ] && echo "/auth persistence Encrypted" > $PIPE
+            if [ "$STAGE" = "starting" ]; then
+                [ "$HAS_HARDWARE_ID" = "true" ] && echo "/auth persistence Encrypted" > $PIPE
+            fi
             gen_html "Status: Authenticated" "$HW_ID_STATUS" "" "" 10
         fi
 
         if [[ "$line" == *"Session Token: Missing"* ]]; then
-            echo "/auth login device" > $PIPE
+            [ "$STAGE" = "starting" ] && echo "/auth login device" > $PIPE
             AUTH_REQUEST_TIME=$(date +%s); AUTH_PENDING=true
         fi
 
@@ -81,7 +91,7 @@ process_logs() {
         fi
 
         if [[ "$line" == *"Hytale Server Booted!"* ]]; then
-            echo "/auth status" > $PIPE
+            [ "$STAGE" = "starting" ] && echo "/auth status" > $PIPE
         fi
     done
 }
@@ -96,7 +106,7 @@ if [ -f "HytaleServer.jar" ] && [ "$AUTO_UPDATE" = "true" ]; then
     $DOWNLOADER_BIN -check-update 2>&1 | process_logs
 
     AVAILABLE_VERSION_RAW="$($DOWNLOADER_BIN -print-version 2>&1 || true)"
-    gen_html "Status: Checking for Updates (Raw) - $AVAILABLE_VERSION" "$HW_ID_STATUS" "" "" 10
+    gen_html "Status: Parsing Available Version..." "$HW_ID_STATUS" "" "" 10
     AVAILABLE_VERSION="$(echo "$AVAILABLE_VERSION_RAW" | tr -d '\r' | tail -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 
     gen_html "Status: Checking for Updates (Available Version) - $AVAILABLE_VERSION" "$HW_ID_STATUS" "" "" 10
@@ -111,8 +121,8 @@ if [ -f "HytaleServer.jar" ] && [ "$AUTO_UPDATE" = "true" ]; then
     
     # Get installed version if jar exists
     INSTALLED_VERSION=""
-    if [ -f "$JAR_FILE" ]; then
-        INSTALLED_VERSION_RAW="$(java -jar "$JAR_FILE" --version 2>&1 || true)"
+    if [ -f "HytaleServer.jar" ]; then
+        INSTALLED_VERSION_RAW="$(java -jar "HytaleServer.jar" --version 2>&1 || true)"
         INSTALLED_VERSION="$(echo "$INSTALLED_VERSION_RAW" | tr -d '\r' | sed -n 's/.*v\([^ ]*\).*/\1/p' | head -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         
         if [ -z "$INSTALLED_VERSION" ]; then
@@ -191,9 +201,6 @@ HYTALE_ADDITIONAL_OPTS="${HYTALE_ADDITIONAL_OPTS:-}"
 [ -n "$HYTALE_ADDITIONAL_OPTS" ] && ARGS="$ARGS $HYTALE_ADDITIONAL_OPTS"
 
 gen_html "Status: Waiting for Auth" "$HW_ID_STATUS" "" "" 5
-
-PIPE=/tmp/hytale_stdin
-[ -p $PIPE ] || mkfifo $PIPE
 
 cleanup() {
     echo "Caught shutdown signal!"
